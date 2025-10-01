@@ -1,0 +1,17 @@
+# Python 虚拟环境 (根据你的虚拟环境文件夹名修改)
+/todoenv/
+
+# Python 字节码文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite 数据库文件 (我们的后端数据库)
+/todo-backend/tasks.db
+
+# 日志文件
+*.log
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db

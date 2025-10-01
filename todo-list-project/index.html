@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的日程</title>
+    <!-- 1. 引入 Vue.js 框架 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 新增：引入 Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <!-- 2. 引入一些基础样式 -->
+    <link rel="stylesheet" href="style.css">
+    
+</head>
+<body>
+
+    <div id="app">
+        <h1>我的日程</h1>
+        
+        <!-- 显示当前时间 -->
+        <p>当前时间：{{ currentDateTime }}</p>
+
+        <!-- 添加新日程 -->
+        <div>
+            <input type="text" v-model="newTaskText" placeholder="输入新日程（例如：14:30 开会）">
+            <button @click="addTask">添加日程</button>
+        </div>
+
+        <br>
+
+        <!-- 日程列表 -->
+        <div>
+            <h2>日程列表</h2>
+            <table>
+                <tr>
+                    <th>时间</th>
+                    <th>内容</th>
+                    <th>操作</th>
+                </tr>
+                <!-- 使用 v-for 循环渲染日程列表 -->
+                <tr v-for="task in tasks" :key="task.id" :class="{ 'current-task': task.isCurrent }">
+                    <td>{{ task.time }}</td>
+                    <td>{{ task.content }}</td>
+                    <td>
+                        <button @click="completeTask(task.id)">完成</button>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <br>
+
+        <!-- 已完成日程 -->
+        <div>
+            <h2>已完成</h2>
+            <table>
+                <tr>
+                    <th>时间</th>
+                    <th>内容</th>
+                </tr>
+                <tr v-for="task in completedTasks" :key="task.id" class="completed">
+                    <td>{{ task.time }}</td>
+                    <td>{{ task.content }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- 3. Vue 应用逻辑 -->
+        <!-- 3. Vue 应用逻辑 (已更新为连接后端 API) -->
+    <script>
+        // 创建一个 Vue 应用实例
+        const { createApp } = Vue
+        
+        // 配置 Axios 的默认基础 URL
+        axios.defaults.baseURL = 'http://127.0.0.1:5000/api';
+        // // --- 在这里添加这行代码 ---
+        // axios.defaults.baseURL = 'http://127.0.0.1:5000/api';
+        
+        createApp({
+            // 数据部分
+            data() {
+                return {
+                    newTaskText: '',
+                    // tasks 数组现在分为未完成和已完成两部分
+                    tasks: [],
+                    completedTasks: [],
+                    currentDateTime: ''
+                }
+            },
+            // 方法部分
+            methods: {
+                // 从后端获取所有任务
+                fetchTasks() {
+                    axios.get('/tasks')
+                        .then(response => {
+                            const allTasks = response.data;
+                            // 将任务分为未完成和已完成两组
+                            this.tasks = allTasks.filter(task => !task.is_completed);
+                            this.completedTasks = allTasks.filter(task => task.is_completed);
+                        })
+                        .catch(error => {
+                            console.error('获取任务失败:', error);
+                            alert('无法连接到服务器，请确保后端已启动。');
+                        });
+                },
+                // 添加新任务到后端
+                addTask() {
+                    if (this.newTaskText.trim() === '') return;
+
+                    const [time, ...contentParts] = this.newTaskText.split(' ');
+                    const content = contentParts.join(' ');
+
+                    if (time && content) {
+                        axios.post('/tasks', { time: time, content: content })
+                            .then(response => {
+                                // 添加成功后，重新从后端获取所有任务以刷新列表
+                                this.fetchTasks();
+                                this.newTaskText = '';
+                            })
+                            .catch(error => {
+                                console.error('添加任务失败:', error);
+                                alert('添加任务失败，请重试。');
+                            });
+                    } else {
+                        alert('请输入正确的格式，例如："15:00 喝水"');
+                    }
+                },
+                // 通知后端将任务标记为完成
+                completeTask(taskId) {
+                    axios.put(`/tasks/${taskId}/complete`)
+                        .then(response => {
+                            // 标记成功后，重新从后端获取所有任务以刷新列表
+                            this.fetchTasks();
+                        })
+                        .catch(error => {
+                            console.error('标记任务完成失败:', error);
+                            alert('操作失败，请重试。');
+                        });
+                },
+                // 更新当前时间 (此部分无需修改)
+                updateCurrentTime() {
+                    const now = new Date();
+                    this.currentDateTime = now.toLocaleString('zh-CN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        weekday: 'long'
+                    });
+                },
+                // 更新当前任务 (此部分无需修改)
+                updateCurrentTask() {
+                    const now = new Date();
+                    const currentHourMinute = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                    
+                    this.tasks.forEach(task => task.isCurrent = false);
+
+                    let currentTask = null;
+                    for (let task of this.tasks) {
+                        if (task.time >= currentHourMinute) {
+                            currentTask = task;
+                            break;
+                        }
+                    }
+                    
+                    if (currentTask) {
+                        currentTask.isCurrent = true;
+                    }
+                }
+            },
+            // 生命周期钩子
+            mounted() {
+                // 页面加载时，从后端获取任务
+                this.fetchTasks();
+                
+                this.updateCurrentTime();
+                this.updateCurrentTask();
+                
+                setInterval(() => {
+                    this.updateCurrentTime();
+                    if (new Date().getSeconds() === 0) {
+                        this.updateCurrentTask();
+                    }
+                }, 1000);
+            }
+        }).mount('#app')
+    </script>
+
+</body>
+</html>

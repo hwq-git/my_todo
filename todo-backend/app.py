@@ -44,40 +44,6 @@ def init_db():
 # 初始化数据库（应用启动时执行一次）
 init_db()
 
-# --- API 接口 ---
-
-# @app.route('/api/tasks', methods=['GET'])
-# def get_tasks():
-#     """获取所有任务"""
-#     db = get_db()
-#     tasks = db.execute('SELECT id, time, content, is_completed FROM tasks ORDER BY time').fetchall()
-#     db.close()
-#     # 将查询结果转换为字典列表
-#     return jsonify([dict(task) for task in tasks])
-
-@app.route('/api/tasks', methods=['GET'])
-def get_tasks():
-    """获取任务，可以通过 day 参数过滤特定星期几的任务"""
-    db = get_db()
-    
-    # 从请求URL中获取 'day' 参数，例如 /api/tasks?day=星期一
-    day_filter = request.args.get('day')
-
-    if day_filter:
-        # 如果提供了 day 参数，只查询当天的、未完成的任务
-        # 使用 LIKE 进行模糊匹配，因为我们的 time 字段是 "星期X 时间段"
-        tasks = db.execute(
-            'SELECT id, time, content, is_completed FROM tasks WHERE is_completed = 0 AND time LIKE ? ORDER BY time',
-            (f'%{day_filter}%',)  # 构建 LIKE 查询，例如 '%星期一%'
-        ).fetchall()
-    else:
-        # 如果没有提供 day 参数，则返回所有未完成的任务（保持原有功能）
-        tasks = db.execute(
-            'SELECT id, time, content, is_completed FROM tasks WHERE is_completed = 0 ORDER BY time'
-        ).fetchall()
-        
-    db.close()
-    return jsonify([dict(task) for task in tasks])
 
 @app.route('/api/tasks', methods=['POST'])
 def add_task():
@@ -98,43 +64,54 @@ def add_task():
     db.close()
 
     return jsonify({'id': task_id, 'time': time, 'content': content, 'is_completed': False}), 201
+@app.route('/api/tasks', methods=['GET'])
+def get_tasks():
+    """获取任务：
+    - 有day参数：返回当日未完成任务
+    - 无day参数：返回所有任务（已完成+未完成），供前端筛选已完成任务
+    """
+    db = get_db()
+    day_filter = request.args.get('day')
 
-# 
+    if day_filter:
+        # 场景1：有day参数（前端获取当日未完成任务）
+        tasks = db.execute(
+            'SELECT id, time, content, is_completed FROM tasks WHERE is_completed = 0 AND time LIKE ? ORDER BY time',
+            (f'%{day_filter}%',)
+        ).fetchall()
+    else:
+        # 场景2：无day参数（前端获取所有任务，用于筛选已完成）
+        tasks = db.execute(
+            'SELECT id, time, content, is_completed FROM tasks ORDER BY time'  # 去掉 WHERE is_completed = 0
+        ).fetchall()
+            
+    db.close()
+    return jsonify([dict(task) for task in tasks])
+
 @app.route('/api/tasks/<int:task_id>/complete', methods=['PUT'])
 def complete_task(task_id):
-    """将一个任务标记为已完成，并返回更新后的当天任务列表"""
     db = get_db()
     task = db.execute('SELECT id FROM tasks WHERE id = ?', (task_id,)).fetchone()
     if not task:
         db.close()
         return jsonify({'error': '任务不存在'}), 404
 
+    # 标记任务为完成
     db.execute('UPDATE tasks SET is_completed = 1 WHERE id = ?', (task_id,))
     db.commit()
-    
-    # --- 添加以下代码 ---
-    # 获取今天是星期几
+
+    # 优化：返回当日已完成任务列表，前端可直接使用
     today = datetime.date.today()
-    weekday_map = {
-        0: '星期一',
-        1: '星期二',
-        2: '星期三',
-        3: '星期四',
-        4: '星期五',
-        5: '星期六',
-        6: '星期日'
-    }
+    weekday_map = {0: '星期一', 1: '星期二', 2: '星期三', 3: '星期四', 4: '星期五', 5: '星期六', 6: '星期日'}
     today_weekday = weekday_map[today.weekday()]
     
-    # 查询更新后的当天任务列表
-    updated_tasks = db.execute(
-        'SELECT id, time, content, is_completed FROM tasks WHERE is_completed = 0 AND time LIKE ? ORDER BY time',
+    completed_tasks = db.execute(
+        'SELECT id, time, content, is_completed FROM tasks WHERE is_completed = 1 AND time LIKE ? ORDER BY time',
         (f'%{today_weekday}%',)
     ).fetchall()
     db.close()
-    
-    # 返回更新后的任务列表
-    return jsonify([dict(task) for task in updated_tasks])
+
+    return jsonify([dict(task) for task in completed_tasks])
 
 
 @app.route('/api/import_schedule', methods=['POST'])
@@ -237,6 +214,45 @@ def import_schedule():
     except Exception as e:
         logger.error("课表导入失败，详细错误：", exc_info=True)
         return jsonify({'error': f'导入失败：{str(e)}'}), 500
+
+
+@app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
+def delete_task(task_id):
+    """
+    删除指定ID的任务
+    - 先检查任务是否存在，不存在返回404
+    - 存在则执行删除操作，返回成功信息
+    """
+    db = get_db()
+    
+    # 1. 检查任务是否存在（避免删除不存在的任务）
+    existing_task = db.execute(
+        'SELECT id FROM tasks WHERE id = ?',
+        (task_id,)
+    ).fetchone()
+    
+    if not existing_task:
+        db.close()
+        logger.warning(f"删除失败：任务ID {task_id} 不存在")
+        return jsonify({'error': f'删除失败：任务不存在（ID：{task_id}）'}), 404  # 404=资源不存在
+    
+    # 2. 执行删除操作
+    try:
+        db.execute(
+            'DELETE FROM tasks WHERE id = ?',
+            (task_id,)
+        )
+        db.commit()
+        logger.debug(f"删除成功：任务ID {task_id}")
+        return jsonify({'message': f'任务已成功删除（ID：{task_id}）'}), 200  # 200=操作成功
+    
+    except Exception as e:
+        db.rollback()  # 出错时回滚事务，避免数据库状态异常
+        logger.error(f"删除任务ID {task_id} 失败：", exc_info=True)
+        return jsonify({'error': f'删除失败：{str(e)}'}), 500  # 500=服务器错误
+    
+    finally:
+        db.close()  # 无论成功/失败，都关闭数据库连接
 
 
 # 运行服务器

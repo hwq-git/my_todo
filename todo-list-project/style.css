@@ -146,3 +146,19 @@ th {
     background-color: #fff3e0;
     font-weight: bold;
 }
+
+/* 新增：删除按钮样式（红色） */
+.btn-delete {
+    background-color: #f44336; /* 红色：删除按钮 */
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 8px;
+}
+
+/* 鼠标悬停时加深颜色（优化体验） */
+.btn-delete:hover {
+    background-color: #d32f2f; /* 深红色 */
+}

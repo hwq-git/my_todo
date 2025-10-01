@@ -4,16 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>我的日程</title>
-    <!-- 1. 引入 Vue.js 框架 -->
+    <!-- 引入 Vue.js 框架 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <!-- 新增：引入 Axios -->
+    <!-- 引入 Axios -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <!-- 2. 引入一些基础样式 -->
+    <!-- 引入样式 -->
     <link rel="stylesheet" href="style.css">
-    
 </head>
 <body>
-
     <div id="app">
         <h1>我的日程</h1>
         
@@ -25,61 +23,45 @@
             <input type="text" v-model="newTaskText" placeholder="输入新日程（例如：14:30 开会）">
             <button @click="addTask">添加日程</button>
         </div>
-        <div>
+
+        <!-- 导入课表 -->
+        <div style="margin: 10px 0;">
             <input type="file" id="import-schedule" accept=".xlsx">
-            <button @click="importSchedule">导入日程</button>
+            <button @click="importSchedule">导入课表</button>
+        </div>
+
+        <!-- 1. 未完成的日程列表 -->
+        <div class="task-section">
+            <h3>📋 当日日程列表</h3>
+            <div class="task-item" v-for="task in tasks" :key="task.id">
+                <span class="task-time">{{ task.time }}</span>
+                <span class="task-content" :class="{ current: task.isCurrent }">{{ task.content }}</span>
+                <button @click="completeTask(task.id)" class="btn-complete">完成</button>
+                <button @click="deleteTask(task.id)" class="btn-delete">删除</button>
+            </div>
+            <div class="empty-tip" v-if="tasks.length === 0">暂无未完成的日程</div>
         </div>
 
         <br>
 
-        <!-- 日程列表 -->
-        <div>
-            <h2>日程列表</h2>
-            <table>
-                <tr>
-                    <th>时间</th>
-                    <th>内容</th>
-                    <th>操作</th>
-                </tr>
-                <!-- 使用 v-for 循环渲染日程列表 -->
-                <tr v-for="task in tasks" :key="task.id" :class="{ 'current-task': task.isCurrent }">
-                    <td>{{ task.time }}</td>
-                    <td>{{ task.content }}</td>
-                    <td>
-                        <button @click="completeTask(task.id)">完成</button>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <br>
-
-        <!-- 已完成日程 -->
-        <div>
-            <h2>已完成</h2>
-            <table>
-                <tr>
-                    <th>时间</th>
-                    <th>内容</th>
-                </tr>
-                <tr v-for="task in completedTasks" :key="task.id" class="completed">
-                    <td>{{ task.time }}</td>
-                    <td>{{ task.content }}</td>
-                </tr>
-            </table>
+        <!-- 2. 已完成的日程列表 -->
+        <div class="task-section completed-section">
+            <h3>✅ 当日已完成</h3>
+            <div class="task-item" v-for="task in completedTasks" :key="task.id">
+                <span class="task-time">{{ task.time }}</span>
+                <span class="task-content completed">{{ task.content }}</span>
+                <button @click="deleteTask(task.id)" class="btn-delete">删除</button>
+            </div>
+            <div class="empty-tip" v-if="completedTasks.length === 0">暂无已完成的日程</div>
         </div>
     </div>
 
-    <!-- 3. Vue 应用逻辑 -->
+    <!-- Vue 应用逻辑 -->
     <script>
-    // 创建一个 Vue 应用实例
     const { createApp } = Vue
-
-    // 配置 Axios 的默认基础 URL
     axios.defaults.baseURL = 'http://127.0.0.1:5000/api';
 
     createApp({
-        // 数据部分
         data() {
             return {
                 newTaskText: '',
@@ -88,40 +70,44 @@
                 currentDateTime: ''
             }
         },
-        // 方法部分
         methods: {
-            // 从后端获取所有任务
-            // fetchTasks() {
-            //     axios.get('/tasks')
-            //        .then(response => {
-            //             const allTasks = response.data;
-            //             // 将任务分为未完成和已完成两组
-            //             this.tasks = allTasks.filter(task =>!task.is_completed);
-            //             this.completedTasks = allTasks.filter(task => task.is_completed);
-            //         })
-            //        .catch(error => {
-            //             console.error('获取任务失败:', error);
-            //             alert('无法连接到服务器，请确保后端已启动。');
-            //         });
-            // },
+            // 获取当日未完成任务
             fetchTasks() {
-            // 1. 获取今天是星期几
-            const now = new Date();
-            const weekdayMap = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
-            const todayWeekday = weekdayMap[now.getDay() === 0 ? 6 : now.getDay() - 1]; // 特殊处理：getDay()周日是0
+                const now = new Date();
+                const weekdayMap = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+                const todayWeekday = weekdayMap[now.getDay() === 0 ? 6 : now.getDay() - 1];
 
-            // 2. 在请求URL中带上 day 参数
-            axios.get(`/tasks?day=${todayWeekday}`)
-            .then(response => {
-                    // 直接将返回的当日任务列表赋给 this.tasks
-                    this.tasks = response.data;
-            })
-            .catch(error => {
-                    console.error('获取当日任务失败:', error);
-                    alert('无法连接到服务器，请确保后端已启动。');
-            });
+                axios.get(`/tasks?day=${todayWeekday}`)
+                    .then(response => {
+                        this.tasks = response.data;
+                        this.updateCurrentTask(); // 加载任务后，立即标记当前任务
+                    })
+                    .catch(error => {
+                        console.error('获取当日任务失败:', error);
+                        alert('无法连接到服务器，请确保后端已启动。');
+                    });
             },
-            // 添加新任务到后端
+
+            // 获取当日已完成任务
+            fetchCompletedTasks() {
+                const now = new Date();
+                const weekdayMap = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+                const todayWeekday = weekdayMap[now.getDay() === 0 ? 6 : now.getDay() - 1];
+
+                axios.get('/tasks')
+                    .then(response => {
+                        const allTasks = response.data;
+                        this.completedTasks = allTasks.filter(
+                            task => task.is_completed && task.time.includes(todayWeekday)
+                        );
+                        console.log('已完成的任务：', this.completedTasks);
+                    })
+                    .catch(error => {
+                        console.error('获取已完成任务失败：', error);
+                    });
+            },
+
+            // 添加新任务
             addTask() {
                 if (this.newTaskText.trim() === '') return;
 
@@ -129,13 +115,18 @@
                 const content = contentParts.join(' ');
 
                 if (time && content) {
-                    axios.post('/tasks', { time: time, content: content })
-                       .then(response => {
-                            // 添加成功后，重新从后端获取所有任务以刷新列表
+                    // 新增任务时，自动添加“当日星期几”（确保能被过滤）
+                    const now = new Date();
+                    const weekdayMap = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+                    const todayWeekday = weekdayMap[now.getDay() === 0 ? 6 : now.getDay() - 1];
+                    const taskTime = `${todayWeekday} ${time}`; // 格式：“星期三 14:30”
+
+                    axios.post('/tasks', { time: taskTime, content: content })
+                        .then(response => {
                             this.fetchTasks();
                             this.newTaskText = '';
                         })
-                       .catch(error => {
+                        .catch(error => {
                             console.error('添加任务失败:', error);
                             alert('添加任务失败，请重试。');
                         });
@@ -143,19 +134,39 @@
                     alert('请输入正确的格式，例如："15:00 喝水"');
                 }
             },
-            // 通知后端将任务标记为完成
+
+            // 标记任务完成
             completeTask(taskId) {
                 axios.put(`/tasks/${taskId}/complete`)
-                   .then(response => {
-                        // 标记成功后，重新从后端获取所有任务以刷新列表
-                        this.fetchTasks();
+                    .then(response => {
+                        this.fetchTasks(); // 刷新未完成列表
+                        this.completedTasks = response.data; // 直接使用后端返回的已完成列表
                     })
-                   .catch(error => {
+                    .catch(error => {
                         console.error('标记任务完成失败:', error);
                         alert('操作失败，请重试。');
                     });
             },
-            // 更新当前时间 (此部分无需修改)
+
+            // 删除任务
+            deleteTask(taskId) {
+                const isConfirm = confirm('确定要删除这个任务吗？删除后无法恢复！');
+                if (!isConfirm) return;
+
+                axios.delete(`/tasks/${taskId}`)
+                    .then(response => {
+                        alert(response.data.message);
+                        this.fetchTasks();
+                        this.fetchCompletedTasks();
+                    })
+                    .catch(error => {
+                        const errorMsg = error.response?.data?.error || '删除失败，请重试';
+                        alert(`删除失败：${errorMsg}`);
+                        console.error('删除任务出错：', error);
+                    });
+            },
+
+            // 更新当前时间
             updateCurrentTime() {
                 const now = new Date();
                 this.currentDateTime = now.toLocaleString('zh-CN', {
@@ -168,7 +179,8 @@
                     weekday: 'long'
                 });
             },
-            // 更新当前任务 (此部分无需修改)
+
+            // 标记当前时间对应的任务（高亮）
             updateCurrentTask() {
                 const now = new Date();
                 const currentHourMinute = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -177,7 +189,8 @@
 
                 let currentTask = null;
                 for (let task of this.tasks) {
-                    if (task.time >= currentHourMinute) {
+                    const taskTimePart = task.time.split(' ')[1]; // 提取“时分”部分
+                    if (taskTimePart && taskTimePart >= currentHourMinute) {
                         currentTask = task;
                         break;
                     }
@@ -187,68 +200,57 @@
                     currentTask.isCurrent = true;
                 }
             },
-            // 新增导入课表方法
+
+            // 导入课表
             importSchedule() {
                 const fileInput = document.getElementById('import-schedule');
                 const file = fileInput.files[0];
-                if (file) {
-                    const formData = new FormData();
-                    formData.append('schedule_file', file);
-                    axios.post('/import_schedule', formData, {
-                        headers: {
-                            'Content-Type': 'multipart/form-data'
-                        }
-                    })
-                   .then(response => {
-                        // 导入成功后，重新从后端获取所有任务以刷新列表
-                        this.fetchTasks();
-                        alert('课表导入成功');
-                    })
-                   .catch(error => {
-                        console.error('导入课表失败:', error);
-                        alert('导入课表失败，请重试。');
-                    });
-                } else {
-                    alert('请选择一个 Excel 文件');
+                if (!file) {
+                    alert('请选择一个 .xlsx 格式的Excel文件');
+                    return;
                 }
+
+                const formData = new FormData();
+                formData.append('schedule_file', file);
+                axios.post('/import_schedule', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                })
+                .then(response => {
+                    this.fetchTasks();
+                    this.fetchCompletedTasks();
+                    alert(response.data.message);
+                })
+                .catch(error => {
+                    const errorMsg = error.response?.data?.error || '导入失败，请重试';
+                    alert(`导入课表失败：${errorMsg}`);
+                    console.error('导入课表失败:', error);
+                });
             }
         },
-        // 生命周期钩子
-        // mounted() {
-        //     // 页面加载时，从后端获取任务
-        //     this.fetchTasks();
-
-        //     this.updateCurrentTime();
-        //     this.updateCurrentTask();
-
-        //     setInterval(() => {
-        //         this.updateCurrentTime();
-        //         if (new Date().getSeconds() === 0) {
-        //             this.updateCurrentTask();
-        //         }
-        //     }, 1000);
-        // }
         mounted() {
-            // 页面加载时，获取当日任务
+            // 页面加载时初始化数据
             this.fetchTasks();
-
+            this.fetchCompletedTasks();
             this.updateCurrentTime();
-            
-            // 移除对 updateCurrentTask 的调用
-            // this.updateCurrentTask();
 
+            // 定时更新
             setInterval(() => {
                 this.updateCurrentTime();
-                
-                // 每天零点刷新一次任务列表，以显示新一天的任务
+                // 每分钟更新一次“当前任务”
+                if (new Date().getSeconds() === 0) {
+                    this.updateCurrentTask();
+                }
+                // 每天零点刷新所有数据
                 const now = new Date();
                 if (now.getHours() === 0 && now.getMinutes() === 0 && now.getSeconds() === 0) {
                     this.fetchTasks();
+                    this.fetchCompletedTasks();
                 }
             }, 1000);
         }
     }).mount('#app')
-</script>
-
+    </script>
 </body>
 </html>

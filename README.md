@@ -19,7 +19,7 @@ A full-stack personal task manager with schedule import, daily task filtering, a
 1. 克隆仓库
 ```
 git clone https://github.com/hwq-git/my_todo.git
-cd 你的仓库名
+cd my_todo
 ```
 2. 启动后端服务
 ```
